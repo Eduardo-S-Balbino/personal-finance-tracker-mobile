@@ -27,6 +27,7 @@ type Transaction = {
 type DashboardData = {
   status: string;
   message?: string;
+  alerts: string[];
   summary: Summary;
   recent_transactions: Transaction[];
 };
@@ -43,28 +44,26 @@ export default function HomeScreen() {
 
       console.log('Buscando dashboard demo mobile...');
 
-      const dashboardResponse = await fetch(`${API_BASE_URL}/api/mobile/demo-dashboard`, {
+      const response = await fetch(`${API_BASE_URL}/api/mobile/demo-dashboard`, {
         method: 'GET',
         headers: {
           Accept: 'application/json',
         },
       });
 
-      const dashboardData = await dashboardResponse.json();
+      const data: DashboardData = await response.json();
 
-      console.log('Resposta do dashboard demo mobile:', dashboardResponse.status, dashboardData);
+      console.log('Resposta do dashboard demo mobile:', response.status, data);
 
-      if (!dashboardResponse.ok || dashboardData.status === 'error') {
-        throw new Error(dashboardData.message || 'Não foi possível carregar os dados da API.');
+      if (!response.ok || data.status === 'error') {
+        throw new Error(data.message || 'Não foi possível carregar os dados da API.');
       }
 
-      setDashboardData(dashboardData);
+      setDashboardData(data);
     } catch (error) {
       console.log('Erro ao carregar dados:', error);
 
-      setErrorMessage(
-        'Não foi possível carregar os dados da API. Verifique o Console do navegador para ver o erro técnico.'
-      );
+      setErrorMessage('Não foi possível carregar os dados da API. Verifique se o backend está online.');
     } finally {
       setLoading(false);
     }
@@ -75,6 +74,7 @@ export default function HomeScreen() {
   }, []);
 
   const summary = dashboardData?.summary;
+  const alerts = dashboardData?.alerts ?? [];
   const recentTransactions = dashboardData?.recent_transactions ?? [];
 
   function formatCurrency(value: number | undefined) {
@@ -100,15 +100,18 @@ export default function HomeScreen() {
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.header}>
         <Text style={styles.appName}>Finance Tracker</Text>
-        <Text style={styles.subtitle}>Controle financeiro pessoal</Text>
+        <Text style={styles.subtitle}>Resumo financeiro do mês</Text>
       </View>
 
-      <View style={styles.card}>
-        <Text style={styles.cardLabel}>Saldo atual</Text>
-        <Text style={styles.balance}>{formatCurrency(summary?.balance)}</Text>
-        <Text style={styles.cardDescription}>
-          Dados carregados da API Flask em produção no Render.
-        </Text>
+      <View style={styles.balanceCard}>
+        <View>
+          <Text style={styles.cardLabel}>Saldo atual</Text>
+          <Text style={styles.balance}>{formatCurrency(summary?.balance)}</Text>
+        </View>
+
+        <View style={styles.statusBadge}>
+          <Text style={styles.statusBadgeText}>API online</Text>
+        </View>
       </View>
 
       <View style={styles.summaryGrid}>
@@ -124,7 +127,7 @@ export default function HomeScreen() {
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Resumo do mês</Text>
+        <Text style={styles.sectionTitle}>Indicadores</Text>
 
         <View style={styles.infoRow}>
           <Text style={styles.infoLabel}>Meta de economia</Text>
@@ -142,11 +145,26 @@ export default function HomeScreen() {
         </View>
       </View>
 
+      {alerts.length > 0 ? (
+        <View style={styles.alertSection}>
+          <Text style={styles.alertTitle}>Alerta financeiro</Text>
+
+          {alerts.map((alert) => (
+            <Text key={alert} style={styles.alertText}>
+              {alert}
+            </Text>
+          ))}
+        </View>
+      ) : null}
+
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Transações recentes</Text>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Recentes</Text>
+          <Text style={styles.sectionCounter}>{recentTransactions.length} itens</Text>
+        </View>
 
         {recentTransactions.length === 0 ? (
-          <Text style={styles.emptyText}>Nenhuma transação carregada ainda.</Text>
+          <Text style={styles.emptyText}>Nenhuma transação carregada.</Text>
         ) : (
           recentTransactions.map((transaction) => (
             <View key={transaction.id} style={styles.transaction}>
@@ -182,13 +200,9 @@ export default function HomeScreen() {
         disabled={loading}
       >
         <Text style={styles.buttonText}>
-          {loading ? 'Carregando...' : 'Atualizar dados da API'}
+          {loading ? 'Atualizando...' : 'Atualizar dashboard'}
         </Text>
       </Pressable>
-
-      <Text style={styles.footer}>
-        Primeira versão mobile consumindo dados do backend Flask em produção.
-      </Text>
     </ScrollView>
   );
 }
@@ -199,30 +213,34 @@ const styles = StyleSheet.create({
     backgroundColor: '#0f172a',
   },
   content: {
-    padding: 20,
-    paddingBottom: 48,
+    padding: 18,
+    paddingTop: 28,
+    paddingBottom: 36,
   },
   header: {
-    marginTop: 28,
-    marginBottom: 24,
+    marginBottom: 18,
   },
   appName: {
     color: '#f8fafc',
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: '800',
   },
   subtitle: {
     color: '#94a3b8',
-    fontSize: 16,
-    marginTop: 6,
+    fontSize: 15,
+    marginTop: 4,
   },
-  card: {
+  balanceCard: {
     backgroundColor: '#1e293b',
-    borderRadius: 20,
-    padding: 22,
-    marginBottom: 18,
+    borderRadius: 22,
+    padding: 20,
+    marginBottom: 14,
     borderWidth: 1,
     borderColor: '#334155',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 12,
   },
   cardLabel: {
     color: '#94a3b8',
@@ -231,24 +249,31 @@ const styles = StyleSheet.create({
   },
   balance: {
     color: '#f8fafc',
-    fontSize: 34,
-    fontWeight: '800',
+    fontSize: 32,
+    fontWeight: '900',
   },
-  cardDescription: {
-    color: '#cbd5e1',
-    fontSize: 14,
-    lineHeight: 20,
-    marginTop: 12,
+  statusBadge: {
+    backgroundColor: '#064e3b',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: '#10b981',
+  },
+  statusBadgeText: {
+    color: '#bbf7d0',
+    fontSize: 12,
+    fontWeight: '800',
   },
   summaryGrid: {
     flexDirection: 'row',
     gap: 12,
-    marginBottom: 18,
+    marginBottom: 14,
   },
   summaryCard: {
     flex: 1,
     backgroundColor: '#111827',
-    borderRadius: 16,
+    borderRadius: 18,
     padding: 16,
     borderWidth: 1,
     borderColor: '#334155',
@@ -260,34 +285,45 @@ const styles = StyleSheet.create({
   },
   income: {
     color: '#22c55e',
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 19,
+    fontWeight: '900',
   },
   expense: {
     color: '#ef4444',
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 19,
+    fontWeight: '900',
   },
   section: {
     backgroundColor: '#1e293b',
-    borderRadius: 18,
-    padding: 18,
-    marginBottom: 16,
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 14,
     borderWidth: 1,
     borderColor: '#334155',
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
   },
   sectionTitle: {
     color: '#f8fafc',
     fontSize: 20,
+    fontWeight: '900',
+    marginBottom: 12,
+  },
+  sectionCounter: {
+    color: '#94a3b8',
+    fontSize: 13,
     fontWeight: '700',
-    marginBottom: 14,
   },
   infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 9,
     borderBottomWidth: 1,
     borderBottomColor: '#334155',
+    paddingVertical: 10,
     gap: 12,
   },
   infoLabel: {
@@ -297,8 +333,31 @@ const styles = StyleSheet.create({
   infoValue: {
     color: '#f8fafc',
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '900',
     textAlign: 'right',
+  },
+  alertSection: {
+    backgroundColor: '#422006',
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#f59e0b',
+  },
+  alertTitle: {
+    color: '#fef3c7',
+    fontSize: 17,
+    fontWeight: '900',
+    marginBottom: 8,
+  },
+  alertText: {
+    color: '#fde68a',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  emptyText: {
+    color: '#94a3b8',
+    fontSize: 14,
   },
   transaction: {
     flexDirection: 'row',
@@ -306,44 +365,41 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderBottomWidth: 1,
     borderBottomColor: '#334155',
-    paddingVertical: 12,
+    paddingVertical: 11,
     gap: 12,
   },
   transactionInfo: {
     flex: 1,
-    paddingRight: 12,
   },
   transactionTitle: {
     color: '#f8fafc',
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '900',
   },
   transactionCategory: {
     color: '#94a3b8',
     fontSize: 13,
     marginTop: 3,
   },
-  transactionExpense: {
-    color: '#ef4444',
-    fontSize: 15,
-    fontWeight: '700',
-  },
   transactionIncome: {
     color: '#22c55e',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  emptyText: {
-    color: '#94a3b8',
     fontSize: 14,
+    fontWeight: '900',
+    textAlign: 'right',
+  },
+  transactionExpense: {
+    color: '#ef4444',
+    fontSize: 14,
+    fontWeight: '900',
+    textAlign: 'right',
   },
   errorBox: {
     backgroundColor: '#7f1d1d',
-    borderColor: '#ef4444',
-    borderWidth: 1,
-    borderRadius: 14,
+    borderRadius: 16,
     padding: 14,
-    marginBottom: 16,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#ef4444',
   },
   errorText: {
     color: '#fecaca',
@@ -352,10 +408,9 @@ const styles = StyleSheet.create({
   },
   button: {
     backgroundColor: '#2563eb',
-    paddingVertical: 16,
     borderRadius: 16,
+    paddingVertical: 16,
     alignItems: 'center',
-    marginTop: 4,
   },
   buttonDisabled: {
     opacity: 0.7,
@@ -363,13 +418,6 @@ const styles = StyleSheet.create({
   buttonText: {
     color: '#ffffff',
     fontSize: 16,
-    fontWeight: '700',
-  },
-  footer: {
-    color: '#64748b',
-    textAlign: 'center',
-    fontSize: 13,
-    marginTop: 18,
-    lineHeight: 20,
+    fontWeight: '900',
   },
 });
