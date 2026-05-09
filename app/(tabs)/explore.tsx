@@ -51,10 +51,7 @@ export default function TransactionsScreen() {
       setTransactions(data.recent_transactions ?? []);
     } catch (error) {
       console.log('Erro ao carregar transações:', error);
-
-      setErrorMessage(
-        'Não foi possível carregar as transações. Verifique se a API está online.'
-      );
+      setErrorMessage('Não foi possível carregar as transações. Verifique se a API está online.');
     } finally {
       setLoading(false);
     }
@@ -87,7 +84,7 @@ export default function TransactionsScreen() {
 
   function getRecurrenceLabel(transaction: Transaction) {
     if (transaction.is_recurring && transaction.recurrence_type === 'monthly') {
-      return 'Recorrente mensal';
+      return 'Mensal';
     }
 
     return 'Única';
@@ -97,15 +94,18 @@ export default function TransactionsScreen() {
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.header}>
         <Text style={styles.appName}>Transações</Text>
-        <Text style={styles.subtitle}>Movimentações recentes carregadas da API</Text>
+        <Text style={styles.subtitle}>Movimentações recentes</Text>
       </View>
 
-      <View style={styles.infoCard}>
-        <Text style={styles.infoTitle}>Resumo da listagem</Text>
-        <Text style={styles.infoDescription}>
-          Esta tela usa o mesmo backend Flask em produção no Render e exibe as transações recentes
-          do usuário demo.
-        </Text>
+      <View style={styles.summaryCard}>
+        <View>
+          <Text style={styles.summaryLabel}>Total carregado</Text>
+          <Text style={styles.summaryValue}>{transactions.length} transações</Text>
+        </View>
+
+        <View style={styles.statusBadge}>
+          <Text style={styles.statusBadgeText}>API online</Text>
+        </View>
       </View>
 
       {errorMessage ? (
@@ -120,20 +120,20 @@ export default function TransactionsScreen() {
         disabled={loading}
       >
         <Text style={styles.buttonText}>
-          {loading ? 'Carregando...' : 'Atualizar transações'}
+          {loading ? 'Atualizando...' : 'Atualizar transações'}
         </Text>
       </Pressable>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Lista de transações</Text>
+        <Text style={styles.sectionTitle}>Lista</Text>
 
         {transactions.length === 0 ? (
           <Text style={styles.emptyText}>Nenhuma transação encontrada.</Text>
         ) : (
           transactions.map((transaction) => (
             <View key={transaction.id} style={styles.transactionCard}>
-              <View style={styles.transactionHeader}>
-                <View style={styles.transactionTitleBox}>
+              <View style={styles.transactionTop}>
+                <View style={styles.transactionInfo}>
                   <Text style={styles.transactionTitle}>{transaction.title}</Text>
                   <Text style={styles.transactionCategory}>{transaction.category}</Text>
                 </View>
@@ -150,34 +150,43 @@ export default function TransactionsScreen() {
                 </Text>
               </View>
 
-              <View style={styles.detailsGrid}>
-                <View style={styles.detailItem}>
-                  <Text style={styles.detailLabel}>Tipo</Text>
-                  <Text style={styles.detailValue}>{getTypeLabel(transaction.type)}</Text>
+              <View style={styles.badgeRow}>
+                <View
+                  style={
+                    transaction.type === 'receita'
+                      ? styles.incomeBadge
+                      : styles.expenseBadge
+                  }
+                >
+                  <Text
+                    style={
+                      transaction.type === 'receita'
+                        ? styles.incomeBadgeText
+                        : styles.expenseBadgeText
+                    }
+                  >
+                    {getTypeLabel(transaction.type)}
+                  </Text>
                 </View>
 
-                <View style={styles.detailItem}>
-                  <Text style={styles.detailLabel}>Data</Text>
-                  <Text style={styles.detailValue}>{formatDate(transaction.date)}</Text>
+                <View style={styles.neutralBadge}>
+                  <Text style={styles.neutralBadgeText}>{formatDate(transaction.date)}</Text>
                 </View>
 
-                <View style={styles.detailItem}>
-                  <Text style={styles.detailLabel}>Recorrência</Text>
-                  <Text style={styles.detailValue}>{getRecurrenceLabel(transaction)}</Text>
+                <View style={styles.neutralBadge}>
+                  <Text style={styles.neutralBadgeText}>{getRecurrenceLabel(transaction)}</Text>
                 </View>
               </View>
 
               {transaction.description ? (
-                <Text style={styles.description}>{transaction.description}</Text>
+                <Text style={styles.description} numberOfLines={2}>
+                  {transaction.description}
+                </Text>
               ) : null}
             </View>
           ))
         )}
       </View>
-
-      <Text style={styles.footer}>
-        Próxima etapa: separar transações em uma rota própria da API e adicionar filtros no app.
-      </Text>
     </ScrollView>
   );
 }
@@ -188,49 +197,65 @@ const styles = StyleSheet.create({
     backgroundColor: '#0f172a',
   },
   content: {
-    padding: 20,
-    paddingBottom: 48,
+    padding: 18,
+    paddingTop: 28,
+    paddingBottom: 36,
   },
   header: {
-    marginTop: 28,
-    marginBottom: 24,
+    marginBottom: 18,
   },
   appName: {
     color: '#f8fafc',
-    fontSize: 32,
-    fontWeight: '800',
+    fontSize: 28,
+    fontWeight: '900',
   },
   subtitle: {
     color: '#94a3b8',
-    fontSize: 16,
-    marginTop: 6,
+    fontSize: 15,
+    marginTop: 4,
   },
-  infoCard: {
+  summaryCard: {
     backgroundColor: '#1e293b',
-    borderRadius: 18,
+    borderRadius: 20,
     padding: 18,
-    marginBottom: 16,
+    marginBottom: 14,
     borderWidth: 1,
     borderColor: '#334155',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 12,
   },
-  infoTitle: {
-    color: '#f8fafc',
-    fontSize: 20,
-    fontWeight: '800',
-    marginBottom: 8,
-  },
-  infoDescription: {
-    color: '#cbd5e1',
+  summaryLabel: {
+    color: '#94a3b8',
     fontSize: 14,
-    lineHeight: 20,
+    marginBottom: 6,
+  },
+  summaryValue: {
+    color: '#f8fafc',
+    fontSize: 24,
+    fontWeight: '900',
+  },
+  statusBadge: {
+    backgroundColor: '#064e3b',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: '#10b981',
+  },
+  statusBadgeText: {
+    color: '#bbf7d0',
+    fontSize: 12,
+    fontWeight: '800',
   },
   errorBox: {
     backgroundColor: '#7f1d1d',
-    borderColor: '#ef4444',
-    borderWidth: 1,
-    borderRadius: 14,
+    borderRadius: 16,
     padding: 14,
-    marginBottom: 16,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#ef4444',
   },
   errorText: {
     color: '#fecaca',
@@ -239,31 +264,31 @@ const styles = StyleSheet.create({
   },
   button: {
     backgroundColor: '#2563eb',
-    paddingVertical: 16,
     borderRadius: 16,
+    paddingVertical: 15,
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 14,
   },
   buttonDisabled: {
     opacity: 0.7,
   },
   buttonText: {
     color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 15,
+    fontWeight: '900',
   },
   section: {
     backgroundColor: '#1e293b',
-    borderRadius: 18,
-    padding: 18,
+    borderRadius: 20,
+    padding: 16,
     borderWidth: 1,
     borderColor: '#334155',
   },
   sectionTitle: {
     color: '#f8fafc',
-    fontSize: 22,
-    fontWeight: '800',
-    marginBottom: 16,
+    fontSize: 20,
+    fontWeight: '900',
+    marginBottom: 12,
   },
   emptyText: {
     color: '#94a3b8',
@@ -271,76 +296,93 @@ const styles = StyleSheet.create({
   },
   transactionCard: {
     backgroundColor: '#111827',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 14,
+    borderRadius: 18,
+    padding: 15,
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: '#334155',
   },
-  transactionHeader: {
+  transactionTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     gap: 12,
-    marginBottom: 14,
+    marginBottom: 12,
   },
-  transactionTitleBox: {
+  transactionInfo: {
     flex: 1,
   },
   transactionTitle: {
     color: '#f8fafc',
-    fontSize: 17,
-    fontWeight: '800',
+    fontSize: 16,
+    fontWeight: '900',
   },
   transactionCategory: {
     color: '#94a3b8',
-    fontSize: 14,
-    marginTop: 4,
+    fontSize: 13,
+    marginTop: 3,
   },
   transactionIncome: {
     color: '#22c55e',
-    fontSize: 16,
-    fontWeight: '800',
+    fontSize: 15,
+    fontWeight: '900',
     textAlign: 'right',
   },
   transactionExpense: {
     color: '#ef4444',
-    fontSize: 16,
-    fontWeight: '800',
+    fontSize: 15,
+    fontWeight: '900',
     textAlign: 'right',
   },
-  detailsGrid: {
-    gap: 8,
-  },
-  detailItem: {
+  badgeRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    borderTopWidth: 1,
-    borderTopColor: '#334155',
-    paddingTop: 8,
-    gap: 12,
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 8,
   },
-  detailLabel: {
-    color: '#94a3b8',
-    fontSize: 13,
+  incomeBadge: {
+    backgroundColor: '#064e3b',
+    borderColor: '#10b981',
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
   },
-  detailValue: {
-    color: '#f8fafc',
-    fontSize: 13,
+  expenseBadge: {
+    backgroundColor: '#450a0a',
+    borderColor: '#ef4444',
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+  },
+  incomeBadgeText: {
+    color: '#bbf7d0',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  expenseBadgeText: {
+    color: '#fecaca',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  neutralBadge: {
+    backgroundColor: '#0f172a',
+    borderColor: '#334155',
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+  },
+  neutralBadgeText: {
+    color: '#cbd5e1',
+    fontSize: 12,
     fontWeight: '700',
-    textAlign: 'right',
   },
   description: {
     color: '#cbd5e1',
-    fontSize: 14,
-    lineHeight: 20,
-    marginTop: 12,
-  },
-  footer: {
-    color: '#64748b',
-    textAlign: 'center',
     fontSize: 13,
-    marginTop: 18,
-    lineHeight: 20,
+    lineHeight: 19,
+    marginTop: 2,
   },
 });
