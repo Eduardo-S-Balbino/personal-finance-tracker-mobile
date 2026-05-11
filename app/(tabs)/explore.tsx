@@ -47,6 +47,7 @@ export default function TransactionsScreen() {
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [editingTransactionId, setEditingTransactionId] = useState<number | null>(null);
+  const [deletingTransactionId, setDeletingTransactionId] = useState<number | null>(null);
 
   const totalIncome = useMemo(() => {
     return transactions
@@ -241,6 +242,51 @@ export default function TransactionsScreen() {
       setErrorMessage(error instanceof Error ? error.message : 'Não foi possível salvar a transação.');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function deleteTransaction(transaction: Transaction) {
+    console.log('BOTAO EXCLUIR ACIONADO', transaction.id);
+
+    if (saving || deletingTransactionId !== null) return;
+
+    try {
+      setDeletingTransactionId(transaction.id);
+      setErrorMessage('');
+      setSuccessMessage('');
+
+      const response = await fetch(`${API_BASE_URL}/api/mobile/transactions/${transaction.id}`, {
+        method: 'DELETE',
+        headers: { Accept: 'application/json' },
+      });
+
+      const responseText = await response.text();
+      let data: any = {};
+
+      try {
+        data = responseText ? JSON.parse(responseText) : {};
+      } catch {
+        console.log('Resposta não JSON:', responseText);
+        throw new Error('A API retornou uma resposta inesperada.');
+      }
+
+      console.log('Resposta da exclusão:', response.status, data);
+
+      if (!response.ok || data.status === 'error') {
+        throw new Error(data.message || 'Não foi possível excluir a transação.');
+      }
+
+      if (editingTransactionId === transaction.id) {
+        resetForm();
+      }
+
+      await loadTransactions(true);
+      setSuccessMessage('Transação excluída com sucesso.');
+    } catch (error) {
+      console.log('Erro ao excluir transação:', error);
+      setErrorMessage(error instanceof Error ? error.message : 'Não foi possível excluir a transação.');
+    } finally {
+      setDeletingTransactionId(null);
     }
   }
 
@@ -454,13 +500,28 @@ export default function TransactionsScreen() {
                 <Text style={styles.description} numberOfLines={2}>{transaction.description}</Text>
               ) : null}
 
-              <Pressable
-                style={styles.editButton}
-                onPress={() => startEditTransaction(transaction)}
-                disabled={saving}
-              >
-                <Text style={styles.editButtonText}>Editar</Text>
-              </Pressable>
+              <View style={styles.actionRow}>
+                <Pressable
+                  style={[styles.editButton, saving || deletingTransactionId !== null ? styles.buttonDisabled : null]}
+                  onPress={() => startEditTransaction(transaction)}
+                  disabled={saving || deletingTransactionId !== null}
+                >
+                  <Text style={styles.editButtonText}>Editar</Text>
+                </Pressable>
+
+                <Pressable
+                  style={[
+                    styles.deleteButton,
+                    saving || deletingTransactionId !== null ? styles.buttonDisabled : null,
+                  ]}
+                  onPress={() => deleteTransaction(transaction)}
+                  disabled={saving || deletingTransactionId !== null}
+                >
+                  <Text style={styles.deleteButtonText}>
+                    {deletingTransactionId === transaction.id ? 'Excluindo...' : 'Excluir'}
+                  </Text>
+                </Pressable>
+              </View>
             </View>
           ))
         )}
@@ -685,15 +746,34 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
   },
   neutralBadgeText: { color: '#cbd5e1', fontSize: 12, fontWeight: '700' },
+  actionRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 12,
+  },
   editButton: {
+    flex: 1,
     backgroundColor: '#2563eb',
     borderRadius: 14,
     paddingVertical: 10,
     alignItems: 'center',
-    marginTop: 12,
   },
   editButtonText: {
     color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  deleteButton: {
+    flex: 1,
+    backgroundColor: '#7f1d1d',
+    borderRadius: 14,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#ef4444',
+  },
+  deleteButtonText: {
+    color: '#fecaca',
     fontSize: 13,
     fontWeight: '900',
   },
