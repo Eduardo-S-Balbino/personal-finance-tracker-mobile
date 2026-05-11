@@ -310,9 +310,9 @@ export default function HomeScreen() {
       ) : null}
 
       <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Despesas por categoria</Text>
-          <Text style={styles.sectionMeta}>{expenseByCategory.length} categorias</Text>
+        <View style={styles.categorySectionHeader}>
+          <Text style={styles.sectionTitleCompact}>Despesas por categoria</Text>
+          <Text style={styles.categoryMeta}>{expenseByCategory.length} categorias</Text>
         </View>
 
         {expenseByCategory.length === 0 ? (
@@ -527,12 +527,30 @@ const styles = StyleSheet.create({
     color: '#f8fafc',
     fontSize: 21,
     fontWeight: '900',
+    flex: 1,
+    minWidth: 0,
+  },
+  sectionTitleCompact: {
+    color: '#f8fafc',
+    fontSize: 25,
+    fontWeight: '900',
+    lineHeight: 30,
   },
   sectionMeta: {
     color: '#93c5fd',
     fontSize: 12,
     fontWeight: '900',
     marginTop: 5,
+    textAlign: 'right',
+  },
+  categorySectionHeader: {
+    marginBottom: 14,
+  },
+  categoryMeta: {
+    color: '#93c5fd',
+    fontSize: 14,
+    fontWeight: '900',
+    marginTop: 4,
   },
   metricRow: {
     flexDirection: 'row',
@@ -615,11 +633,15 @@ const styles = StyleSheet.create({
     color: '#f8fafc',
     fontSize: 15,
     fontWeight: '800',
+    flex: 1,
+    minWidth: 0,
   },
   categoryValue: {
     color: '#cbd5e1',
     fontSize: 14,
     fontWeight: '800',
+    textAlign: 'right',
+    flexShrink: 0,
   },
   categoryTrack: {
     height: 12,
@@ -649,6 +671,7 @@ const styles = StyleSheet.create({
   },
   transactionInfo: {
     flex: 1,
+    minWidth: 0,
   },
   transactionTitle: {
     color: '#f8fafc',
@@ -665,12 +688,14 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '900',
     textAlign: 'right',
+    flexShrink: 0,
   },
   transactionExpense: {
     color: '#ef4444',
     fontSize: 15,
     fontWeight: '900',
     textAlign: 'right',
+    flexShrink: 0,
   },
   errorBox: {
     backgroundColor: '#991b1b',
