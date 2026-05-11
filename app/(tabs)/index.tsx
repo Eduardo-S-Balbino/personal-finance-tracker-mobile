@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 const API_BASE_URL = 'https://personal-finance-tracker-wrlj.onrender.com';
@@ -8,6 +8,7 @@ type Summary = {
   total_income: number;
   total_expense: number;
   goal_percentage: number;
+  goal_progress: number;
   savings_rate: number;
   top_category: string | null;
 };
@@ -24,12 +25,38 @@ type Transaction = {
   recurrence_type: string | null;
 };
 
+type ExpenseByCategoryChart = {
+  labels: string[];
+  values: number[];
+};
+
+type MonthlyEvolutionChart = {
+  labels: string[];
+  income_values: number[];
+  expense_values: number[];
+};
+
+type DashboardCharts = {
+  expense_by_category?: ExpenseByCategoryChart;
+  monthly_evolution?: MonthlyEvolutionChart;
+};
+
+type DashboardFilters = {
+  available_categories?: string[];
+  selected_category?: string;
+  selected_month?: number;
+  selected_type?: string;
+  selected_year?: number;
+};
+
 type DashboardData = {
   status: string;
   message?: string;
-  alerts: string[];
   summary: Summary;
   recent_transactions: Transaction[];
+  alerts?: string[];
+  charts?: DashboardCharts;
+  filters?: DashboardFilters;
 };
 
 export default function HomeScreen() {
@@ -51,7 +78,7 @@ export default function HomeScreen() {
         },
       });
 
-      const data: DashboardData = await response.json();
+      const data = await response.json();
 
       console.log('Resposta do dashboard demo mobile:', response.status, data);
 
@@ -62,8 +89,9 @@ export default function HomeScreen() {
       setDashboardData(data);
     } catch (error) {
       console.log('Erro ao carregar dados:', error);
-
-      setErrorMessage('Não foi possível carregar os dados da API. Verifique se o backend está online.');
+      setErrorMessage(
+        'Não foi possível carregar os dados da API. Verifique se o backend está online no Render.'
+      );
     } finally {
       setLoading(false);
     }
@@ -74,11 +102,35 @@ export default function HomeScreen() {
   }, []);
 
   const summary = dashboardData?.summary;
-  const alerts = dashboardData?.alerts ?? [];
   const recentTransactions = dashboardData?.recent_transactions ?? [];
+  const alerts = dashboardData?.alerts ?? [];
+  const selectedMonth = dashboardData?.filters?.selected_month;
+  const selectedYear = dashboardData?.filters?.selected_year;
+  const expenseChart = dashboardData?.charts?.expense_by_category;
 
-  function formatCurrency(value: number | undefined) {
-    if (value === undefined || Number.isNaN(value)) {
+  const expenseByCategory = useMemo(() => {
+    const labels = expenseChart?.labels ?? [];
+    const values = expenseChart?.values ?? [];
+
+    return labels
+      .map((label, index) => ({
+        label,
+        value: Number(values[index] ?? 0),
+      }))
+      .filter((item) => item.value > 0)
+      .sort((first, second) => second.value - first.value);
+  }, [expenseChart]);
+
+  const maxCategoryExpense = useMemo(() => {
+    if (expenseByCategory.length === 0) {
+      return 0;
+    }
+
+    return Math.max(...expenseByCategory.map((item) => item.value));
+  }, [expenseByCategory]);
+
+  function formatCurrency(value: number | undefined | null) {
+    if (value === undefined || value === null || Number.isNaN(value)) {
       return 'R$ 0,00';
     }
 
@@ -88,30 +140,117 @@ export default function HomeScreen() {
     });
   }
 
-  function formatPercentage(value: number | undefined) {
-    if (value === undefined || Number.isNaN(value)) {
+  function formatPercentage(value: number | undefined | null) {
+    if (value === undefined || value === null || Number.isNaN(value)) {
       return '0%';
     }
 
-    return `${value.toLocaleString('pt-BR')}%`;
+    return `${value.toLocaleString('pt-BR', {
+      maximumFractionDigits: 1,
+    })}%`;
+  }
+
+  function formatDate(dateValue: string) {
+    const [year, month, day] = dateValue.split('-');
+
+    if (!year || !month || !day) {
+      return dateValue;
+    }
+
+    return `${day}/${month}/${year}`;
+  }
+
+  function getMonthName(month?: number) {
+    const months = [
+      'Jan',
+      'Fev',
+      'Mar',
+      'Abr',
+      'Mai',
+      'Jun',
+      'Jul',
+      'Ago',
+      'Set',
+      'Out',
+      'Nov',
+      'Dez',
+    ];
+
+    if (!month || month < 1 || month > 12) {
+      return 'Mês atual';
+    }
+
+    return months[month - 1];
+  }
+
+  function getGoalProgress() {
+    const progress = summary?.goal_progress ?? 0;
+
+    if (progress < 0) {
+      return 0;
+    }
+
+    if (progress > 100) {
+      return 100;
+    }
+
+    return progress;
+  }
+
+  function getSavingsStatus() {
+    const savingsRate = summary?.savings_rate ?? 0;
+    const goal = summary?.goal_percentage ?? 0;
+
+    if (savingsRate >= goal) {
+      return 'Meta atingida';
+    }
+
+    if (savingsRate > 0) {
+      return 'Em progresso';
+    }
+
+    return 'Sem economia';
+  }
+
+  function getTransactionAmountStyle(type: 'receita' | 'despesa') {
+    return type === 'receita' ? styles.transactionIncome : styles.transactionExpense;
+  }
+
+  function getTransactionSign(type: 'receita' | 'despesa') {
+    return type === 'receita' ? '+ ' : '- ';
   }
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.header}>
-        <Text style={styles.appName}>Finance Tracker</Text>
-        <Text style={styles.subtitle}>Resumo financeiro do mês</Text>
+        <View>
+          <Text style={styles.appName}>Finance Tracker</Text>
+          <Text style={styles.subtitle}>Dashboard financeiro mobile</Text>
+        </View>
+
+        <View style={styles.apiBadge}>
+          <View style={styles.apiDot} />
+          <Text style={styles.apiBadgeText}>API</Text>
+        </View>
       </View>
 
-      <View style={styles.balanceCard}>
-        <View>
-          <Text style={styles.cardLabel}>Saldo atual</Text>
-          <Text style={styles.balance}>{formatCurrency(summary?.balance)}</Text>
+      <View style={styles.heroCard}>
+        <View style={styles.heroTop}>
+          <View>
+            <Text style={styles.cardLabel}>Saldo atual</Text>
+            <Text style={styles.balance}>{formatCurrency(summary?.balance)}</Text>
+          </View>
+
+          <View style={styles.periodBadge}>
+            <Text style={styles.periodText}>
+              {getMonthName(selectedMonth)} {selectedYear ?? ''}
+            </Text>
+          </View>
         </View>
 
-        <View style={styles.statusBadge}>
-          <Text style={styles.statusBadgeText}>API online</Text>
-        </View>
+        <Text style={styles.cardDescription}>
+          Dados sincronizados com o backend Flask em produção no Render.
+        </Text>
       </View>
 
       <View style={styles.summaryGrid}>
@@ -127,29 +266,42 @@ export default function HomeScreen() {
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Indicadores</Text>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Indicadores</Text>
+          <Text style={styles.sectionMeta}>{getSavingsStatus()}</Text>
+        </View>
 
-        <View style={styles.infoRow}>
+        <View style={styles.metricRow}>
           <Text style={styles.infoLabel}>Meta de economia</Text>
           <Text style={styles.infoValue}>{formatPercentage(summary?.goal_percentage)}</Text>
         </View>
 
-        <View style={styles.infoRow}>
+        <View style={styles.metricRow}>
           <Text style={styles.infoLabel}>Taxa de economia</Text>
           <Text style={styles.infoValue}>{formatPercentage(summary?.savings_rate)}</Text>
         </View>
 
-        <View style={styles.infoRow}>
+        <View style={styles.metricRow}>
           <Text style={styles.infoLabel}>Maior categoria</Text>
           <Text style={styles.infoValue}>{summary?.top_category || 'Sem dados'}</Text>
+        </View>
+
+        <View style={styles.progressArea}>
+          <View style={styles.progressHeader}>
+            <Text style={styles.progressLabel}>Progresso da meta</Text>
+            <Text style={styles.progressValue}>{formatPercentage(getGoalProgress())}</Text>
+          </View>
+
+          <View style={styles.progressTrack}>
+            <View style={[styles.progressFill, { width: `${getGoalProgress()}%` }]} />
+          </View>
         </View>
       </View>
 
       {alerts.length > 0 ? (
-        <View style={styles.alertSection}>
+        <View style={styles.alertBox}>
           <Text style={styles.alertTitle}>Alerta financeiro</Text>
-
-          {alerts.map((alert) => (
+          {alerts.slice(0, 2).map((alert) => (
             <Text key={alert} style={styles.alertText}>
               {alert}
             </Text>
@@ -159,28 +311,53 @@ export default function HomeScreen() {
 
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Despesas por categoria</Text>
+          <Text style={styles.sectionMeta}>{expenseByCategory.length} categorias</Text>
+        </View>
+
+        {expenseByCategory.length === 0 ? (
+          <Text style={styles.emptyText}>Nenhuma despesa carregada para o período.</Text>
+        ) : (
+          expenseByCategory.map((item) => {
+            const percentage =
+              maxCategoryExpense > 0 ? Math.max((item.value / maxCategoryExpense) * 100, 8) : 0;
+
+            return (
+              <View key={item.label} style={styles.categoryItem}>
+                <View style={styles.categoryHeader}>
+                  <Text style={styles.categoryName}>{item.label}</Text>
+                  <Text style={styles.categoryValue}>{formatCurrency(item.value)}</Text>
+                </View>
+
+                <View style={styles.categoryTrack}>
+                  <View style={[styles.categoryFill, { width: `${percentage}%` }]} />
+                </View>
+              </View>
+            );
+          })
+        )}
+      </View>
+
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Recentes</Text>
-          <Text style={styles.sectionCounter}>{recentTransactions.length} itens</Text>
+          <Text style={styles.sectionMeta}>{recentTransactions.length} itens</Text>
         </View>
 
         {recentTransactions.length === 0 ? (
-          <Text style={styles.emptyText}>Nenhuma transação carregada.</Text>
+          <Text style={styles.emptyText}>Nenhuma transação carregada ainda.</Text>
         ) : (
           recentTransactions.map((transaction) => (
             <View key={transaction.id} style={styles.transaction}>
               <View style={styles.transactionInfo}>
                 <Text style={styles.transactionTitle}>{transaction.title}</Text>
-                <Text style={styles.transactionCategory}>{transaction.category}</Text>
+                <Text style={styles.transactionCategory}>
+                  {transaction.category} • {formatDate(transaction.date)}
+                </Text>
               </View>
 
-              <Text
-                style={
-                  transaction.type === 'receita'
-                    ? styles.transactionIncome
-                    : styles.transactionExpense
-                }
-              >
-                {transaction.type === 'receita' ? '+ ' : '- '}
+              <Text style={getTransactionAmountStyle(transaction.type)}>
+                {getTransactionSign(transaction.type)}
                 {formatCurrency(transaction.amount)}
               </Text>
             </View>
@@ -203,6 +380,10 @@ export default function HomeScreen() {
           {loading ? 'Atualizando...' : 'Atualizar dashboard'}
         </Text>
       </Pressable>
+
+      <Text style={styles.footer}>
+        App mobile integrado ao backend Flask em produção.
+      </Text>
     </ScrollView>
   );
 }
@@ -215,32 +396,60 @@ const styles = StyleSheet.create({
   content: {
     padding: 18,
     paddingTop: 28,
-    paddingBottom: 36,
+    paddingBottom: 48,
   },
   header: {
-    marginBottom: 18,
+    marginBottom: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 14,
   },
   appName: {
     color: '#f8fafc',
-    fontSize: 28,
-    fontWeight: '800',
+    fontSize: 30,
+    fontWeight: '900',
   },
   subtitle: {
     color: '#94a3b8',
     fontSize: 15,
-    marginTop: 4,
+    marginTop: 5,
   },
-  balanceCard: {
+  apiBadge: {
+    backgroundColor: '#064e3b',
+    borderColor: '#10b981',
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+  },
+  apiDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: '#22c55e',
+  },
+  apiBadgeText: {
+    color: '#bbf7d0',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  heroCard: {
     backgroundColor: '#1e293b',
-    borderRadius: 22,
-    padding: 20,
+    borderRadius: 24,
+    padding: 22,
     marginBottom: 14,
     borderWidth: 1,
     borderColor: '#334155',
+  },
+  heroTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
     gap: 12,
+    alignItems: 'flex-start',
   },
   cardLabel: {
     color: '#94a3b8',
@@ -249,21 +458,27 @@ const styles = StyleSheet.create({
   },
   balance: {
     color: '#f8fafc',
-    fontSize: 32,
+    fontSize: 36,
     fontWeight: '900',
   },
-  statusBadge: {
-    backgroundColor: '#064e3b',
+  periodBadge: {
+    backgroundColor: '#0f172a',
+    borderColor: '#334155',
+    borderWidth: 1,
     borderRadius: 999,
     paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: '#10b981',
+    paddingVertical: 7,
   },
-  statusBadgeText: {
-    color: '#bbf7d0',
+  periodText: {
+    color: '#cbd5e1',
     fontSize: 12,
     fontWeight: '800',
+  },
+  cardDescription: {
+    color: '#cbd5e1',
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 12,
   },
   summaryGrid: {
     flexDirection: 'row',
@@ -285,18 +500,18 @@ const styles = StyleSheet.create({
   },
   income: {
     color: '#22c55e',
-    fontSize: 19,
+    fontSize: 20,
     fontWeight: '900',
   },
   expense: {
     color: '#ef4444',
-    fontSize: 19,
+    fontSize: 20,
     fontWeight: '900',
   },
   section: {
     backgroundColor: '#1e293b',
-    borderRadius: 20,
-    padding: 16,
+    borderRadius: 22,
+    padding: 18,
     marginBottom: 14,
     borderWidth: 1,
     borderColor: '#334155',
@@ -304,21 +519,22 @@ const styles = StyleSheet.create({
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
+    alignItems: 'flex-start',
+    gap: 12,
+    marginBottom: 14,
   },
   sectionTitle: {
     color: '#f8fafc',
-    fontSize: 20,
+    fontSize: 21,
     fontWeight: '900',
-    marginBottom: 12,
   },
-  sectionCounter: {
-    color: '#94a3b8',
-    fontSize: 13,
-    fontWeight: '700',
+  sectionMeta: {
+    color: '#93c5fd',
+    fontSize: 12,
+    fontWeight: '900',
+    marginTop: 5,
   },
-  infoRow: {
+  metricRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     borderBottomWidth: 1,
@@ -328,17 +544,48 @@ const styles = StyleSheet.create({
   },
   infoLabel: {
     color: '#cbd5e1',
-    fontSize: 14,
+    fontSize: 15,
   },
   infoValue: {
     color: '#f8fafc',
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '900',
     textAlign: 'right',
   },
-  alertSection: {
-    backgroundColor: '#422006',
-    borderRadius: 18,
+  progressArea: {
+    marginTop: 16,
+  },
+  progressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  progressLabel: {
+    color: '#cbd5e1',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  progressValue: {
+    color: '#f8fafc',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  progressTrack: {
+    height: 10,
+    backgroundColor: '#0f172a',
+    borderRadius: 999,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#22c55e',
+    borderRadius: 999,
+  },
+  alertBox: {
+    backgroundColor: '#451a03',
+    borderRadius: 20,
     padding: 16,
     marginBottom: 14,
     borderWidth: 1,
@@ -346,7 +593,7 @@ const styles = StyleSheet.create({
   },
   alertTitle: {
     color: '#fef3c7',
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '900',
     marginBottom: 8,
   },
@@ -355,9 +602,41 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
   },
+  categoryItem: {
+    marginBottom: 14,
+  },
+  categoryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 8,
+  },
+  categoryName: {
+    color: '#f8fafc',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  categoryValue: {
+    color: '#cbd5e1',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  categoryTrack: {
+    height: 12,
+    backgroundColor: '#0f172a',
+    borderRadius: 999,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  categoryFill: {
+    height: '100%',
+    backgroundColor: '#3b82f6',
+    borderRadius: 999,
+  },
   emptyText: {
     color: '#94a3b8',
-    fontSize: 14,
+    fontSize: 15,
   },
   transaction: {
     flexDirection: 'row',
@@ -365,7 +644,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderBottomWidth: 1,
     borderBottomColor: '#334155',
-    paddingVertical: 11,
+    paddingVertical: 12,
     gap: 12,
   },
   transactionInfo: {
@@ -373,44 +652,45 @@ const styles = StyleSheet.create({
   },
   transactionTitle: {
     color: '#f8fafc',
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '900',
   },
   transactionCategory: {
     color: '#94a3b8',
     fontSize: 13,
-    marginTop: 3,
+    marginTop: 4,
   },
   transactionIncome: {
     color: '#22c55e',
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '900',
     textAlign: 'right',
   },
   transactionExpense: {
     color: '#ef4444',
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '900',
     textAlign: 'right',
   },
   errorBox: {
-    backgroundColor: '#7f1d1d',
+    backgroundColor: '#991b1b',
     borderRadius: 16,
-    padding: 14,
+    padding: 16,
     marginBottom: 14,
     borderWidth: 1,
     borderColor: '#ef4444',
   },
   errorText: {
-    color: '#fecaca',
-    fontSize: 14,
+    color: '#fee2e2',
+    fontSize: 15,
     lineHeight: 20,
   },
   button: {
     backgroundColor: '#2563eb',
     borderRadius: 16,
-    paddingVertical: 16,
+    padding: 18,
     alignItems: 'center',
+    marginBottom: 16,
   },
   buttonDisabled: {
     opacity: 0.7,
@@ -419,5 +699,10 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '900',
+  },
+  footer: {
+    color: '#64748b',
+    textAlign: 'center',
+    fontSize: 13,
   },
 });
