@@ -46,6 +46,7 @@ export default function TransactionsScreen() {
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [editingTransactionId, setEditingTransactionId] = useState<number | null>(null);
 
   const totalIncome = useMemo(() => {
     return transactions
@@ -117,8 +118,78 @@ export default function TransactionsScreen() {
     }
   }
 
-  async function createTransaction() {
-    console.log('BOTAO SALVAR ACIONADO');
+  function resetForm() {
+    setForm({ ...initialForm, date: new Date().toISOString().slice(0, 10) });
+    setEditingTransactionId(null);
+    setShowForm(false);
+  }
+
+  function startEditTransaction(transaction: Transaction) {
+    setForm({
+      title: transaction.title,
+      amount: String(transaction.amount).replace('.', ','),
+      type: transaction.type,
+      category: transaction.category,
+      date: transaction.date,
+      description: transaction.description ?? '',
+      recurrence:
+        transaction.is_recurring && transaction.recurrence_type === 'monthly'
+          ? 'monthly'
+          : 'once',
+    });
+
+    setEditingTransactionId(transaction.id);
+    setShowForm(true);
+    setErrorMessage('');
+    setSuccessMessage('');
+  }
+
+  function validateForm() {
+    const title = form.title.trim();
+    const category = form.category.trim();
+    const description = form.description.trim();
+    const normalizedAmount = form.amount.replace(/\s/g, '').replace(/\./g, '').replace(',', '.');
+    const amount = Number(normalizedAmount);
+    const date = form.date.trim();
+
+    if (!title) {
+      setErrorMessage('Preencha o título da transação.');
+      return null;
+    }
+
+    if (!form.amount.trim()) {
+      setErrorMessage('Preencha o valor da transação.');
+      return null;
+    }
+
+    if (Number.isNaN(amount) || amount <= 0) {
+      setErrorMessage('Digite um valor maior que zero. Exemplo: 18,50');
+      return null;
+    }
+
+    if (!category) {
+      setErrorMessage('Preencha a categoria da transação.');
+      return null;
+    }
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      setErrorMessage('Digite a data no formato AAAA-MM-DD. Exemplo: 2026-05-15');
+      return null;
+    }
+
+    return {
+      title,
+      amount,
+      type: form.type,
+      category,
+      date,
+      description,
+      recurrence: form.recurrence,
+    };
+  }
+
+  async function submitTransaction() {
+    console.log(editingTransactionId ? 'BOTAO ATUALIZAR ACIONADO' : 'BOTAO SALVAR ACIONADO');
 
     if (saving) return;
 
@@ -127,51 +198,21 @@ export default function TransactionsScreen() {
       setErrorMessage('');
       setSuccessMessage('');
 
-      const title = form.title.trim();
-      const category = form.category.trim();
-      const description = form.description.trim();
-      const normalizedAmount = form.amount.replace(/\s/g, '').replace(/\./g, '').replace(',', '.');
-      const amount = Number(normalizedAmount);
+      const payload = validateForm();
 
-      if (!title) {
-        setErrorMessage('Preencha o título da transação.');
+      if (!payload) {
         return;
       }
 
-      if (!form.amount.trim()) {
-        setErrorMessage('Preencha o valor da transação.');
-        return;
-      }
+      const isEditing = editingTransactionId !== null;
+      const url = isEditing
+        ? `${API_BASE_URL}/api/mobile/transactions/${editingTransactionId}`
+        : `${API_BASE_URL}/api/mobile/transactions`;
 
-      if (Number.isNaN(amount) || amount <= 0) {
-        setErrorMessage('Digite um valor maior que zero. Exemplo: 18,50');
-        return;
-      }
+      console.log(isEditing ? 'Atualizando transação mobile:' : 'Criando transação mobile:', payload);
 
-      if (!category) {
-        setErrorMessage('Preencha a categoria da transação.');
-        return;
-      }
-
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(form.date.trim())) {
-        setErrorMessage('Digite a data no formato AAAA-MM-DD. Exemplo: 2026-05-15');
-        return;
-      }
-
-      const payload = {
-        title,
-        amount,
-        type: form.type,
-        category,
-        date: form.date.trim(),
-        description,
-        recurrence: form.recurrence,
-      };
-
-      console.log('Criando transação mobile:', payload);
-
-      const response = await fetch(`${API_BASE_URL}/api/mobile/transactions`, {
-        method: 'POST',
+      const response = await fetch(url, {
+        method: isEditing ? 'PUT' : 'POST',
         headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
@@ -186,19 +227,18 @@ export default function TransactionsScreen() {
         throw new Error('A API retornou uma resposta inesperada.');
       }
 
-      console.log('Resposta da criação:', response.status, data);
+      console.log(isEditing ? 'Resposta da atualização:' : 'Resposta da criação:', response.status, data);
 
       if (!response.ok || data.status === 'error') {
-        throw new Error(data.message || 'Não foi possível criar a transação.');
+        throw new Error(data.message || 'Não foi possível salvar a transação.');
       }
 
-      setForm({ ...initialForm, date: new Date().toISOString().slice(0, 10) });
-      setShowForm(false);
+      resetForm();
       await loadTransactions(true);
-      setSuccessMessage('Transação criada com sucesso.');
+      setSuccessMessage(isEditing ? 'Transação atualizada com sucesso.' : 'Transação criada com sucesso.');
     } catch (error) {
-      console.log('Erro ao criar transação:', error);
-      setErrorMessage(error instanceof Error ? error.message : 'Não foi possível criar a transação.');
+      console.log('Erro ao salvar transação:', error);
+      setErrorMessage(error instanceof Error ? error.message : 'Não foi possível salvar a transação.');
     } finally {
       setSaving(false);
     }
@@ -248,7 +288,14 @@ export default function TransactionsScreen() {
       <Pressable
         style={styles.primaryButton}
         onPress={() => {
-          setShowForm((currentValue) => !currentValue);
+          if (showForm) {
+            resetForm();
+          } else {
+            setShowForm(true);
+            setEditingTransactionId(null);
+            setForm({ ...initialForm, date: new Date().toISOString().slice(0, 10) });
+          }
+
           setErrorMessage('');
           setSuccessMessage('');
         }}
@@ -260,7 +307,7 @@ export default function TransactionsScreen() {
 
       {showForm ? (
         <View style={styles.formCard}>
-          <Text style={styles.sectionTitle}>Nova transação</Text>
+          <Text style={styles.sectionTitle}>{editingTransactionId ? 'Editar transação' : 'Nova transação'}</Text>
 
           <Text style={styles.inputLabel}>Título</Text>
           <TextInput
@@ -344,12 +391,18 @@ export default function TransactionsScreen() {
 
           <View style={styles.nativeButtonWrapper}>
             <Button
-              title={saving ? 'Salvando...' : 'Salvar transação'}
-              onPress={createTransaction}
+              title={saving ? 'Salvando...' : editingTransactionId ? 'Atualizar transação' : 'Salvar transação'}
+              onPress={submitTransaction}
               disabled={saving}
               color="#22c55e"
             />
           </View>
+
+          {editingTransactionId ? (
+            <Pressable style={styles.cancelEditButton} onPress={resetForm} disabled={saving}>
+              <Text style={styles.cancelEditButtonText}>Cancelar edição</Text>
+            </Pressable>
+          ) : null}
         </View>
       ) : null}
 
@@ -400,6 +453,14 @@ export default function TransactionsScreen() {
               {transaction.description ? (
                 <Text style={styles.description} numberOfLines={2}>{transaction.description}</Text>
               ) : null}
+
+              <Pressable
+                style={styles.editButton}
+                onPress={() => startEditTransaction(transaction)}
+                disabled={saving}
+              >
+                <Text style={styles.editButtonText}>Editar</Text>
+              </Pressable>
             </View>
           ))
         )}
@@ -490,6 +551,20 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginTop: 12,
     marginBottom: 4,
+  },
+  cancelEditButton: {
+    backgroundColor: '#334155',
+    borderRadius: 16,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: '#64748b',
+  },
+  cancelEditButtonText: {
+    color: '#e2e8f0',
+    fontSize: 14,
+    fontWeight: '900',
   },
   buttonDisabled: { opacity: 0.7 },
   formCard: {
@@ -610,5 +685,17 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
   },
   neutralBadgeText: { color: '#cbd5e1', fontSize: 12, fontWeight: '700' },
+  editButton: {
+    backgroundColor: '#2563eb',
+    borderRadius: 14,
+    paddingVertical: 10,
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  editButtonText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '900',
+  },
   description: { color: '#cbd5e1', fontSize: 13, lineHeight: 19, marginTop: 2 },
 });
